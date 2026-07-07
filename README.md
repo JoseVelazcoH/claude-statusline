@@ -6,6 +6,18 @@ A minimal Claude Code statusline showing model, folder, git branch, context wind
 
 ## Installation
 
+### Quick install
+
+Downloads the scripts and merges the required `settings.json` blocks automatically (requires `curl` and `jq`):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/JoseVelazcoH/claude-statusline/main/install.sh | sh
+```
+
+Restart Claude Code to see the statusline.
+
+### Manual install
+
 **1. Clone the repo**
 
 ```sh
