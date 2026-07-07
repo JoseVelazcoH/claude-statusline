@@ -6,7 +6,14 @@ A minimal Claude Code statusline showing model, folder, git branch, context wind
 
 ## Installation
 
-**1. Copy the scripts**
+**1. Clone the repo**
+
+```sh
+git clone https://github.com/JoseVelazcoH/claude-statusline.git
+cd claude-statusline
+```
+
+**2. Copy the scripts**
 
 ```sh
 cp fetch-usage.sh ~/.claude/fetch-usage.sh
@@ -14,7 +21,7 @@ cp statusline-command.sh ~/.claude/statusline-command.sh
 chmod +x ~/.claude/fetch-usage.sh ~/.claude/statusline-command.sh
 ```
 
-**2. Merge `settings.json` into `~/.claude/settings.json`**
+**3. Merge `settings.json` into `~/.claude/settings.json`**
 
 Add the `statusLine` and `hooks` blocks from `settings.json` into your existing `~/.claude/settings.json`. If you don't have one yet, copy it directly:
 
@@ -22,7 +29,7 @@ Add the `statusLine` and `hooks` blocks from `settings.json` into your existing 
 cp settings.json ~/.claude/settings.json
 ```
 
-**3. Trigger an initial fetch (optional)**
+**4. Trigger an initial fetch (optional)**
 
 ```sh
 bash ~/.claude/fetch-usage.sh
