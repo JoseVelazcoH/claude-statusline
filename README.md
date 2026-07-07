@@ -1,6 +1,8 @@
 # claude-watch
 
-![my-minimal-claude-code-statusline-config-v0-bw0th9wf90mg1](https://github.com/user-attachments/assets/05edca4f-749a-433b-b4da-262f840e0a1c)
+![statusline](assets/statusline.svg)
+
+A minimal Claude Code statusline showing model, folder, git branch, context window, and usage-limit resets. Themed with Catppuccin Mocha and portable across Linux and macOS.
 
 ## Installation
 
@@ -26,13 +28,11 @@ cp settings.json ~/.claude/settings.json
 bash ~/.claude/fetch-usage.sh
 ```
 
-The usage cache will otherwise populate automatically on the next tool call or Claude response.
-
 ## How it works
 
-- **`statusline-command.sh`** — reads the JSON piped by Claude Code and renders two lines: model/folder/branch, then usage stats and context window.
-- **`fetch-usage.sh`** — reads the OAuth token (macOS Keychain via `security`, or `~/.claude/.credentials.json` on Linux), caches it in `/tmp/.claude_token_cache` (owner-only) for 15 minutes, hits the `/oauth/usage` endpoint (3s timeout), and writes results to `/tmp/.claude_usage_cache`. On failure the stale cache is preserved.
-- **`settings.json`** — wires up the statusline command and triggers `fetch-usage.sh` in the background on `PreToolUse` and `Stop` hooks.
+- `statusline-command.sh` renders three lines: model/folder/branch, context window usage, and the limit-window reset countdowns. Usage values are colored by threshold (green below 50%, yellow 50 to 79%, red 80% or more).
+- `fetch-usage.sh` reads the OAuth token (macOS Keychain or `~/.claude/.credentials.json` on Linux), caches it for 15 minutes, hits the `/oauth/usage` endpoint, and writes the results to a cache file. On failure the stale cache is preserved.
+- `settings.json` wires up the statusline and refreshes usage in the background on the `PreToolUse` and `Stop` hooks.
 
 ## Dependencies
 
