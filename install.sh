@@ -15,7 +15,14 @@ mkdir -p "$CLAUDE_DIR"
 echo "-> downloading scripts"
 curl -fsSL "$RAW/fetch-usage.sh"        -o "$CLAUDE_DIR/fetch-usage.sh"
 curl -fsSL "$RAW/statusline-command.sh" -o "$CLAUDE_DIR/statusline-command.sh"
-chmod +x "$CLAUDE_DIR/fetch-usage.sh" "$CLAUDE_DIR/statusline-command.sh"
+curl -fsSL "$RAW/statusline-theme.sh"   -o "$CLAUDE_DIR/statusline-theme.sh"
+chmod +x "$CLAUDE_DIR/fetch-usage.sh" "$CLAUDE_DIR/statusline-command.sh" "$CLAUDE_DIR/statusline-theme.sh"
+
+echo "-> downloading themes"
+mkdir -p "$CLAUDE_DIR/themes"
+for t in mocha macchiato frappe latte; do
+  curl -fsSL "$RAW/themes/$t.sh" -o "$CLAUDE_DIR/themes/$t.sh"
+done
 
 echo "-> configuring settings.json"
 new_settings=$(curl -fsSL "$RAW/settings.json")
@@ -32,3 +39,4 @@ else
 fi
 
 echo "-> done. restart Claude Code to see the statusline."
+echo "   change theme with: ~/.claude/statusline-theme.sh <mocha|macchiato|frappe|latte>"

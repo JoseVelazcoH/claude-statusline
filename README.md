@@ -47,6 +47,17 @@ cp settings.json ~/.claude/settings.json
 bash ~/.claude/fetch-usage.sh
 ```
 
+## Themes
+
+Four Catppuccin flavors are included: `mocha` (default), `macchiato`, `frappe`, and `latte`. Switch with:
+
+```sh
+~/.claude/statusline-theme.sh latte     # set a theme
+~/.claude/statusline-theme.sh           # list themes and show the current one
+```
+
+The change applies on the next statusline render, no restart needed. Add your own palette by dropping a `themes/<name>.sh` file that sets the same color-role variables.
+
 ## How it works
 
 - `statusline-command.sh` renders three lines: model/folder/branch, context window usage, and the limit-window reset countdowns. Usage values are colored by threshold (green below 50%, yellow 50 to 79%, red 80% or more).

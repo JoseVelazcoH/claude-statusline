@@ -1,6 +1,19 @@
 #!/bin/sh
 input=$(cat)
 
+# --- theme: load color roles from themes/<flavor>.sh (default: mocha) ---
+# Built-in Mocha defaults so the statusline still renders if the theme is missing.
+C_MODEL="250;179;135"; C_DIR="137;220;235"; C_BRANCH="203;166;247"
+C_SEP="108;112;134"; C_LABEL="127;132;156"
+C_GREEN="166;227;161"; C_YELLOW="249;226;175"; C_RED="243;139;168"
+
+SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd 2>/dev/null)
+THEMES_DIR="${SCRIPT_DIR:-$HOME/.claude}/themes"
+flavor=$(cat "$HOME/.claude/.statusline-theme" 2>/dev/null || echo mocha)
+theme_file="$THEMES_DIR/${flavor}.sh"
+[ -f "$theme_file" ] || theme_file="$THEMES_DIR/mocha.sh"
+[ -f "$theme_file" ] && . "$theme_file"
+
 # --- model ---
 model=$(echo "$input" | jq -r '.model.display_name // ""')
 
@@ -65,31 +78,31 @@ if [ -n "$used" ]; then
   fi
 fi
 
-# --- usage_color: Catppuccin Mocha — green < 50, yellow 50-79, red >= 80 ---
+# --- usage_color: theme-driven — green < 50, yellow 50-79, red >= 80 ---
 usage_color() {
   n=${1:-0}
   if [ "$n" -ge 80 ]; then
-    printf '\033[38;2;243;139;168m'   # Red    #f38ba8
+    printf '\033[38;2;%sm' "$C_RED"
   elif [ "$n" -ge 50 ]; then
-    printf '\033[38;2;249;226;175m'   # Yellow #f9e2af
+    printf '\033[38;2;%sm' "$C_YELLOW"
   else
-    printf '\033[38;2;166;227;161m'   # Green  #a6e3a1
+    printf '\033[38;2;%sm' "$C_GREEN"
   fi
 }
 
-# --- assemble output (Catppuccin Mocha palette) ---
-SEP="\033[38;2;108;112;134m • \033[0m"                # Overlay0 #6c7086
-LABEL="\033[2m\033[38;2;127;132;156m"                 # Overlay1 #7f849c
-DELTA="\033[2m\033[38;2;127;132;156m"                 # Overlay1 #7f849c
+# --- assemble output (colors from the loaded theme) ---
+SEP="\033[38;2;${C_SEP}m • \033[0m"
+LABEL="\033[2m\033[38;2;${C_LABEL}m"
+DELTA="\033[2m\033[38;2;${C_LABEL}m"
 RST="\033[0m"
 
 # line 1: model | folder • branch
-printf "\033[1m\033[38;2;250;179;135m%s\033[22m\033[0m" "$model"        # Peach  #fab387
-printf "\033[38;2;108;112;134m | \033[0m"                              # Overlay0
-printf "\033[1m\033[38;2;137;220;235m%s\033[22m\033[0m" "$dir_name"     # Sky    #89dceb
+printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$C_MODEL" "$model"
+printf "\033[38;2;%sm | \033[0m" "$C_SEP"
+printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$C_DIR" "$dir_name"
 if [ -n "$branch" ]; then
   printf "%b" "$SEP"
-  printf "\033[1m\033[38;2;203;166;247m%s\033[22m\033[0m" "$branch"     # Mauve  #cba6f7
+  printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$C_BRANCH" "$branch"
 fi
 
 # line 2: ctx  — dim label + severity-colored value
