@@ -22,10 +22,7 @@ five_h_reset=""
 seven_d_reset=""
 
 if [ -f "$CACHE_FILE" ]; then
-  five_h=$(sed -n '1p' "$CACHE_FILE")
-  seven_d=$(sed -n '2p' "$CACHE_FILE")
-  five_h_reset=$(sed -n '3p' "$CACHE_FILE")
-  seven_d_reset=$(sed -n '4p' "$CACHE_FILE")
+  { read -r five_h; read -r seven_d; read -r five_h_reset; read -r seven_d_reset; } < "$CACHE_FILE"
 else
   bash ~/.claude/fetch-usage.sh > /dev/null 2>&1 &
 fi
@@ -33,7 +30,9 @@ fi
 # --- compute_delta: given a raw ISO timestamp, returns human-readable time until reset ---
 compute_delta() {
   clean=$(echo "$1" | sed 's/\.[0-9]*//' | sed 's/[+-][0-9][0-9]:[0-9][0-9]$//' | sed 's/Z$//')
-  reset_epoch=$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$clean" "+%s" 2>/dev/null)
+  # Portable epoch parse: GNU/Linux `date -d`, fallback to BSD/macOS `date -j -f`
+  reset_epoch=$(TZ=UTC date -d "$clean" "+%s" 2>/dev/null \
+    || TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%S" "$clean" "+%s" 2>/dev/null)
   if [ -z "$reset_epoch" ]; then return; fi
   now_epoch=$(date -u "+%s")
   diff=$(( reset_epoch - now_epoch ))
@@ -66,37 +65,56 @@ if [ -n "$used" ]; then
   fi
 fi
 
-# --- assemble output ---
-SEP="\033[90m • \033[0m"
+# --- usage_color: Catppuccin Mocha — green < 50, yellow 50-79, red >= 80 ---
+usage_color() {
+  n=${1:-0}
+  if [ "$n" -ge 80 ]; then
+    printf '\033[38;2;243;139;168m'   # Red    #f38ba8
+  elif [ "$n" -ge 50 ]; then
+    printf '\033[38;2;249;226;175m'   # Yellow #f9e2af
+  else
+    printf '\033[38;2;166;227;161m'   # Green  #a6e3a1
+  fi
+}
+
+# --- assemble output (Catppuccin Mocha palette) ---
+SEP="\033[38;2;108;112;134m • \033[0m"                # Overlay0 #6c7086
+LABEL="\033[2m\033[38;2;127;132;156m"                 # Overlay1 #7f849c
+DELTA="\033[2m\033[38;2;127;132;156m"                 # Overlay1 #7f849c
+RST="\033[0m"
 
 # line 1: model | folder • branch
-printf "\033[38;5;208m\033[1m%s\033[22m\033[0m" "$model"
-printf "\033[90m | \033[0m"
-printf "\033[1m\033[38;2;76;208;222m%s\033[22m\033[0m" "$dir_name"
+printf "\033[1m\033[38;2;250;179;135m%s\033[22m\033[0m" "$model"        # Peach  #fab387
+printf "\033[38;2;108;112;134m | \033[0m"                              # Overlay0
+printf "\033[1m\033[38;2;137;220;235m%s\033[22m\033[0m" "$dir_name"     # Sky    #89dceb
 if [ -n "$branch" ]; then
   printf "%b" "$SEP"
-  printf "\033[1m\033[38;2;192;103;222m%s\033[22m\033[0m" "$branch"
+  printf "\033[1m\033[38;2;203;166;247m%s\033[22m\033[0m" "$branch"     # Mauve  #cba6f7
 fi
 
-# line 2: usage | ctx
-printf "\n"
-if [ -n "$five_h" ]; then
-  printf "\033[38;2;156;162;175m5h %s%%\033[0m" "$five_h"
-  if [ -n "$five_h_reset" ]; then
-    delta=$(compute_delta "$five_h_reset")
-    [ -n "$delta" ] && printf " \033[2m\033[38;2;156;162;175m(%s)\033[0m" "$delta"
-  fi
-fi
-if [ -n "$seven_d" ]; then
-  [ -n "$five_h" ] && printf "%b" "$SEP"
-  printf "\033[38;2;156;162;175m7d %s%%\033[0m" "$seven_d"
-  if [ -n "$seven_d_reset" ]; then
-    delta=$(compute_delta "$seven_d_reset")
-    [ -n "$delta" ] && printf " \033[2m\033[38;2;156;162;175m(%s)\033[0m" "$delta"
-  fi
-fi
+# line 2: ctx  — dim label + severity-colored value
 if [ -n "$ctx_str" ]; then
-  printf "\033[90m | \033[0m"
-  printf "\033[38;2;156;162;175mctx %s\033[0m" "$ctx_str"
-  [ -n "$ctx_tokens_str" ] && printf " \033[2m\033[38;2;156;162;175m(%s)\033[0m" "$ctx_tokens_str"
+  printf "\n"
+  printf "%bctx%b " "$LABEL" "$RST"
+  printf "%b%s%b" "$(usage_color "$used_int")" "$ctx_str" "$RST"
+  [ -n "$ctx_tokens_str" ] && printf " %b(%s)%b" "$DELTA" "$ctx_tokens_str" "$RST"
+fi
+
+# line 3: limit usage (5h / 7d)  — dim label + severity-colored value
+printf "\n"
+first=1
+if [ -n "$five_h_reset" ]; then
+  delta=$(compute_delta "$five_h_reset")
+  if [ -n "$delta" ]; then
+    printf "%breset%b " "$LABEL" "$RST"
+    printf "%b↻ %s%b" "$(usage_color "$five_h")" "$delta" "$RST"
+    first=0
+  fi
+fi
+if [ -n "$seven_d_reset" ]; then
+  delta=$(compute_delta "$seven_d_reset")
+  if [ -n "$delta" ]; then
+    [ "$first" -eq 0 ] && printf "%b" "$SEP"
+    printf "%b↻ %s%b" "$(usage_color "$seven_d")" "$delta" "$RST"
+  fi
 fi
