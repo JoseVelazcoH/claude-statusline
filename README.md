@@ -1,4 +1,4 @@
-# claude-watch
+# Claude-statusline
 
 ![statusline](assets/statusline.svg)
 
