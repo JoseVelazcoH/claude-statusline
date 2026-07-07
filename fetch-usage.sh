@@ -10,17 +10,37 @@ CACHE_FILE="/tmp/.claude_usage_cache"
 TOKEN_CACHE="/tmp/.claude_token_cache"
 TOKEN_TTL=900  # 15 minutes
 
+# --- portable mtime: GNU/Linux `stat -c %Y` first (BSD's `stat -f` succeeds on
+#     Linux as --file-system, so it must NOT be tried first), then BSD/macOS ---
+file_mtime() {
+  stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null || echo 0
+}
+
+# --- read the raw credentials JSON: macOS Keychain first, then Linux file ---
+read_creds() {
+  # macOS: stored in the login Keychain
+  creds=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
+  if [ -n "$creds" ]; then
+    printf '%s' "$creds"
+    return
+  fi
+  # Linux: stored on disk
+  if [ -f "$HOME/.claude/.credentials.json" ]; then
+    cat "$HOME/.claude/.credentials.json" 2>/dev/null
+  fi
+}
+
 # --- get token (with 15-min cache to avoid repeated credential reads) ---
 token=""
 if [ -f "$TOKEN_CACHE" ]; then
-  cache_age=$(( $(date -u +%s) - $(stat -f %m "$TOKEN_CACHE" 2>/dev/null || echo 0) ))
+  cache_age=$(( $(date -u +%s) - $(file_mtime "$TOKEN_CACHE") ))
   if [ "$cache_age" -lt "$TOKEN_TTL" ]; then
     token=$(cat "$TOKEN_CACHE" 2>/dev/null)
   fi
 fi
 
 if [ -z "$token" ]; then
-  creds_json=$(security find-generic-password -s "Claude Code-credentials" -w 2>/dev/null)
+  creds_json=$(read_creds)
   if [ -z "$creds_json" ]; then
     exit 0
   fi
@@ -28,7 +48,8 @@ if [ -z "$token" ]; then
   if [ -z "$token" ]; then
     exit 0
   fi
-  printf '%s' "$token" > "$TOKEN_CACHE"
+  # write the token cache with owner-only permissions (avoid world-readable /tmp)
+  (umask 077; printf '%s' "$token" > "$TOKEN_CACHE")
 fi
 
 usage_json=$(curl -s -m 3 \

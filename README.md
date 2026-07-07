@@ -31,7 +31,7 @@ The usage cache will otherwise populate automatically on the next tool call or C
 ## How it works
 
 - **`statusline-command.sh`** — reads the JSON piped by Claude Code and renders two lines: model/folder/branch, then usage stats and context window.
-- **`fetch-usage.sh`** — reads the OAuth token from `~/.claude/.credentials.json`, caches it in `/tmp/.claude_token_cache` for 15 minutes, hits the `/oauth/usage` endpoint (3s timeout), and writes results to `/tmp/.claude_usage_cache`. On failure the stale cache is preserved.
+- **`fetch-usage.sh`** — reads the OAuth token (macOS Keychain via `security`, or `~/.claude/.credentials.json` on Linux), caches it in `/tmp/.claude_token_cache` (owner-only) for 15 minutes, hits the `/oauth/usage` endpoint (3s timeout), and writes results to `/tmp/.claude_usage_cache`. On failure the stale cache is preserved.
 - **`settings.json`** — wires up the statusline command and triggers `fetch-usage.sh` in the background on `PreToolUse` and `Stop` hooks.
 
 ## Dependencies
