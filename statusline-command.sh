@@ -90,6 +90,22 @@ usage_color() {
   fi
 }
 
+# render_bar <percent> [width=10] -> "████░░░░░░"
+render_bar() {
+  pct=${1:-0}
+  width=${2:-10}
+  filled=$(( pct * width / 100 ))
+  [ "$filled" -gt "$width" ] && filled=$width
+  [ "$filled" -lt 0 ] && filled=0
+  empty=$(( width - filled ))
+  bar=""
+  i=0
+  while [ "$i" -lt "$filled" ]; do bar="${bar}█"; i=$((i + 1)); done
+  i=0
+  while [ "$i" -lt "$empty" ]; do bar="${bar}░"; i=$((i + 1)); done
+  printf '%s' "$bar"
+}
+
 # --- assemble output (colors from the loaded theme) ---
 SEP="\033[38;2;${C_SEP}m • \033[0m"
 LABEL="\033[2m\033[38;2;${C_LABEL}m"
@@ -113,14 +129,15 @@ if [ -n "$ctx_str" ]; then
   [ -n "$ctx_tokens_str" ] && printf " %b(%s)%b" "$DELTA" "$ctx_tokens_str" "$RST"
 fi
 
-# line 3: limit usage (5h / 7d)  — dim label + severity-colored value
+# line 3: limit usage (5h / 7d)  — dim label + progress bar + severity-colored value
 printf "\n"
 first=1
 if [ -n "$five_h_reset" ]; then
   delta=$(compute_delta "$five_h_reset")
   if [ -n "$delta" ]; then
-    printf "%breset%b " "$LABEL" "$RST"
-    printf "%b↻ %s%b" "$(usage_color "$five_h")" "$delta" "$RST"
+    printf "%bsession%b " "$LABEL" "$RST"
+    printf "%b%s %s%%%b" "$(usage_color "$five_h")" "$(render_bar "$five_h")" "$five_h" "$RST"
+    printf " %b↻ %s%b" "$DELTA" "$delta" "$RST"
     first=0
   fi
 fi
@@ -128,6 +145,8 @@ if [ -n "$seven_d_reset" ]; then
   delta=$(compute_delta "$seven_d_reset")
   if [ -n "$delta" ]; then
     [ "$first" -eq 0 ] && printf "%b" "$SEP"
-    printf "%b↻ %s%b" "$(usage_color "$seven_d")" "$delta" "$RST"
+    printf "%bweek%b " "$LABEL" "$RST"
+    printf "%b%s %s%%%b" "$(usage_color "$seven_d")" "$(render_bar "$seven_d")" "$seven_d" "$RST"
+    printf " %b↻ %s%b" "$DELTA" "$delta" "$RST"
   fi
 fi
