@@ -1,6 +1,6 @@
 #!/bin/sh
-# Toggle/reorder statusline segments by writing to ~/.claude/.statusline-config.
-# The statusline picks it up on the next render.
+# Toggle/reorder statusline segments and lines by writing to
+# ~/.claude/.statusline-config. The statusline picks it up on the next render.
 set -e
 
 CLAUDE_DIR="$HOME/.claude"
