@@ -9,13 +9,26 @@ STATE="$CLAUDE_DIR/.statusline-config"
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd 2>/dev/null)
 . "${SCRIPT_DIR:-$CLAUDE_DIR}/lib.sh"
 
-current=$(read_segments)
+current=$(read_layout)
+flat=$(flatten_layout "$current")
 
 print_status() {
-  echo "current order: $current"
+  echo "current layout: $current"
+  echo "lines:"
+  old_ifs=$IFS
+  IFS=';'
+  set -f
+  set -- $current
+  set +f
+  IFS=$old_ifs
+  n=1
+  for group in "$@"; do
+    echo "  line $n: $group"
+    n=$((n + 1))
+  done
   echo "segments:"
-  for seg in $(printf '%s' "$DEFAULT_SEGMENTS" | tr ',' ' '); do
-    if segment_enabled "$seg" "$current"; then
+  for seg in $(printf '%s' "$ALL_SEGMENTS" | tr ',' ' '); do
+    if segment_enabled "$seg" "$flat"; then
       echo "  [x] $seg"
     else
       echo "  [ ] $seg"
@@ -23,7 +36,8 @@ print_status() {
   done
   echo
   echo "usage: statusline-config.sh enable|disable <segment>"
-  echo "       statusline-config.sh order <comma,separated,list>"
+  echo "       statusline-config.sh order '<line1,segs>;<line2,segs>;...'"
+  echo "       (';' separates lines, ',' separates segments on the same line — quote it, ';' is a shell separator)"
 }
 
 case "$1" in
@@ -32,23 +46,41 @@ case "$1" in
     ;;
   enable)
     seg=$2
-    if ! segment_enabled "$seg" "$DEFAULT_SEGMENTS"; then
-      echo "error: unknown segment '$seg' (known: $DEFAULT_SEGMENTS)" >&2
+    if ! segment_enabled "$seg" "$ALL_SEGMENTS"; then
+      echo "error: unknown segment '$seg' (known: $ALL_SEGMENTS)" >&2
       exit 1
     fi
-    if segment_enabled "$seg" "$current"; then
+    if segment_enabled "$seg" "$flat"; then
       echo "'$seg' already enabled"
     else
-      printf '%s\n' "${current:+$current,}$seg" > "$STATE"
+      # append to the last line of the current layout
+      case "$current" in
+        *";"*) prefix="${current%;*}"; last="${current##*;}" ;;
+        *) prefix=""; last="$current" ;;
+      esac
+      new_last="${last:+$last,}$seg"
+      new="${prefix:+$prefix;}$new_last"
+      printf '%s\n' "$new" > "$STATE"
       echo "enabled '$seg'"
     fi
     ;;
   disable)
     seg=$2
-    if ! segment_enabled "$seg" "$current"; then
+    if ! segment_enabled "$seg" "$flat"; then
       echo "'$seg' already disabled"
     else
-      new=$(printf '%s' "$current" | tr ',' '\n' | grep -v "^${seg}\$" | tr '\n' ',' | sed 's/,$//')
+      old_ifs=$IFS
+      IFS=';'
+      set -f
+      set -- $current
+      set +f
+      IFS=$old_ifs
+      new=""
+      for group in "$@"; do
+        filtered=$(printf '%s' "$group" | tr ',' '\n' | grep -v "^${seg}\$" | tr '\n' ',' | sed 's/,$//')
+        [ -z "$filtered" ] && continue
+        new="${new:+$new;}$filtered"
+      done
       printf '%s\n' "$new" > "$STATE"
       echo "disabled '$seg'"
     fi
@@ -56,17 +88,17 @@ case "$1" in
   order)
     list=$2
     if [ -z "$list" ]; then
-      echo "error: provide a comma-separated list" >&2
+      echo "error: provide a layout string, e.g. 'model,dir;ctx;session,week'" >&2
       exit 1
     fi
-    for seg in $(printf '%s' "$list" | tr ',' ' '); do
-      if ! segment_enabled "$seg" "$DEFAULT_SEGMENTS"; then
-        echo "error: unknown segment '$seg' (known: $DEFAULT_SEGMENTS)" >&2
+    for seg in $(flatten_layout "$list" | tr ',' ' '); do
+      if ! segment_enabled "$seg" "$ALL_SEGMENTS"; then
+        echo "error: unknown segment '$seg' (known: $ALL_SEGMENTS)" >&2
         exit 1
       fi
     done
     printf '%s\n' "$list" > "$STATE"
-    echo "order set to '$list'"
+    echo "layout set to '$list'"
     ;;
   *)
     echo "error: unknown command '$1'" >&2

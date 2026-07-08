@@ -21,4 +21,12 @@ segment_enabled model "model,dir,branch" || { echo "FAIL: model should be enable
 ! segment_enabled session "sessionx,dir" || { echo "FAIL: session should not match sessionx (substring false positive)" >&2; exit 1; }
 segment_enabled sessionx "session,sessionx" || { echo "FAIL: sessionx should be enabled" >&2; exit 1; }
 
+assert_eq "$(flatten_layout "model,dir;ctx;session,week")" "model,dir,ctx,session,week" "flatten_layout multi-line"
+assert_eq "$(flatten_layout "model,dir,branch")" "model,dir,branch" "flatten_layout single-line passthrough"
+
+# a segment moved to a different line is still found via the flattened form
+layout="branch;model,dir;session,week"
+segment_enabled branch "$(flatten_layout "$layout")" || { echo "FAIL: branch should be enabled after moving lines" >&2; exit 1; }
+! segment_enabled ctx "$(flatten_layout "$layout")" || { echo "FAIL: ctx should be disabled (left out of layout)" >&2; exit 1; }
+
 echo "ok"

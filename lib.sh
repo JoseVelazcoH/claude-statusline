@@ -1,6 +1,11 @@
 # Shared helpers for statusline-command.sh and statusline-config.sh.
+#
+# Layout format: ';' separates lines, ',' separates segments within a line,
+# e.g. "model,dir,branch;ctx;session,week" is the 3-line default. A layout
+# with no ';' puts every segment on one line.
 
-DEFAULT_SEGMENTS="model,dir,branch,ctx,session,week"
+ALL_SEGMENTS="model,dir,branch,ctx,session,week"
+DEFAULT_LAYOUT="model,dir,branch;ctx;session,week"
 
 # render_bar <percent> [width=10] -> "████░░░░░░"
 render_bar() {
@@ -28,8 +33,13 @@ segment_enabled() {
   esac
 }
 
-# read_segments -> current segment list from ~/.claude/.statusline-config, or the default
-read_segments() {
+# read_layout -> current layout string from ~/.claude/.statusline-config, or the default
+read_layout() {
   local val=$(cat "$HOME/.claude/.statusline-config" 2>/dev/null)
-  printf '%s' "${val:-$DEFAULT_SEGMENTS}"
+  printf '%s' "${val:-$DEFAULT_LAYOUT}"
+}
+
+# flatten_layout <layout> -> flat comma list of every segment in the layout (line breaks removed)
+flatten_layout() {
+  printf '%s' "$1" | tr ';' ','
 }

@@ -16,7 +16,7 @@ theme_file="$THEMES_DIR/${flavor}.sh"
 
 # shellcheck source=lib.sh
 . "${SCRIPT_DIR:-$HOME/.claude}/lib.sh"
-segments=$(read_segments)
+layout=$(read_layout)
 
 # --- model ---
 model=$(echo "$input" | jq -r '.model.display_name // ""')
@@ -101,37 +101,6 @@ LABEL="\033[2m\033[38;2;${C_LABEL}m"
 DELTA="\033[2m\033[38;2;${C_LABEL}m"
 RST="\033[0m"
 
-# line 1: model / dir / branch — order and inclusion driven by $segments
-line1=""
-prev=""
-for seg in $(printf '%s' "$segments" | tr ',' ' '); do
-  case "$seg" in
-    model) val=$model; color=$C_MODEL ;;
-    dir) val=$dir_name; color=$C_DIR ;;
-    branch) val=$branch; color=$C_BRANCH ;;
-    *) continue ;;
-  esac
-  [ -z "$val" ] && continue
-  if [ -n "$line1" ]; then
-    if [ "$prev" = "model" ]; then
-      line1="${line1}$(printf "%b" "$BAR_SEP")"
-    else
-      line1="${line1}$(printf "%b" "$SEP")"
-    fi
-  fi
-  line1="${line1}$(printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$color" "$val")"
-  prev=$seg
-done
-printf '%s' "$line1"
-
-# line 2: ctx — dim label + severity-colored value
-if segment_enabled ctx "$segments" && [ -n "$ctx_str" ]; then
-  printf "\n"
-  printf "%bctx%b " "$LABEL" "$RST"
-  printf "%b%s%b" "$(usage_color "$used_int")" "$ctx_str" "$RST"
-  [ -n "$ctx_tokens_str" ] && printf " %b(%s)%b" "$DELTA" "$ctx_tokens_str" "$RST"
-fi
-
 # render_limit <label> <pct> <reset-iso> -> prints "label ████░░ NN% ↻ delta", returns 1 if no data
 render_limit() {
   local label=$1
@@ -146,15 +115,62 @@ render_limit() {
   return 0
 }
 
-# line 3: limit usage (5h / 7d) — order and inclusion driven by $segments
-line3=""
-for seg in $(printf '%s' "$segments" | tr ',' ' '); do
-  case "$seg" in
-    session) out=$(render_limit session "$five_h" "$five_h_reset") || continue ;;
-    week) out=$(render_limit week "$seven_d" "$seven_d_reset") || continue ;;
-    *) continue ;;
+# render_segment <name> -> prints the segment's text, returns 1 if it has no data to show
+render_segment() {
+  case "$1" in
+    model)
+      [ -z "$model" ] && return 1
+      printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$C_MODEL" "$model"
+      ;;
+    dir)
+      [ -z "$dir_name" ] && return 1
+      printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$C_DIR" "$dir_name"
+      ;;
+    branch)
+      [ -z "$branch" ] && return 1
+      printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$C_BRANCH" "$branch"
+      ;;
+    ctx)
+      [ -z "$ctx_str" ] && return 1
+      printf "%bctx%b " "$LABEL" "$RST"
+      printf "%b%s%b" "$(usage_color "$used_int")" "$ctx_str" "$RST"
+      [ -n "$ctx_tokens_str" ] && printf " %b(%s)%b" "$DELTA" "$ctx_tokens_str" "$RST"
+      ;;
+    session) render_limit session "$five_h" "$five_h_reset" || return 1 ;;
+    week) render_limit week "$seven_d" "$seven_d_reset" || return 1 ;;
+    *) return 1 ;;
   esac
-  [ -n "$line3" ] && line3="${line3}$(printf "%b" "$SEP")"
-  line3="${line3}${out}"
+  return 0
+}
+
+# split the layout into lines on ';' — must run in the main shell (not a
+# pipeline/subshell) so the "$@" set here survives into the loop below.
+old_ifs=$IFS
+IFS=';'
+set -f
+set -- $layout
+set +f
+IFS=$old_ifs
+
+any_line=0
+for group in "$@"; do
+  line=""
+  prev=""
+  for seg in $(printf '%s' "$group" | tr ',' ' '); do
+    out=$(render_segment "$seg") || continue
+    if [ -n "$line" ]; then
+      if [ "$prev" = "model" ]; then
+        line="${line}$(printf "%b" "$BAR_SEP")"
+      else
+        line="${line}$(printf "%b" "$SEP")"
+      fi
+    fi
+    line="${line}${out}"
+    prev=$seg
+  done
+  if [ -n "$line" ]; then
+    [ "$any_line" -eq 1 ] && printf "\n"
+    printf "%s" "$line"
+    any_line=1
+  fi
 done
-[ -n "$line3" ] && printf "\n%s" "$line3"
