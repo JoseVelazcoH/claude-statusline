@@ -26,6 +26,12 @@ for t in mocha macchiato frappe latte; do
   curl -fsSL "$RAW/themes/$t.sh" -o "$CLAUDE_DIR/themes/$t.sh"
 done
 
+echo "-> installing slash commands"
+for skill in statusline-theme statusline-config; do
+  mkdir -p "$CLAUDE_DIR/skills/$skill"
+  curl -fsSL "$RAW/skills/$skill/SKILL.md" -o "$CLAUDE_DIR/skills/$skill/SKILL.md"
+done
+
 echo "-> configuring settings.json"
 new_settings=$(curl -fsSL "$RAW/settings.json")
 
@@ -42,3 +48,4 @@ fi
 
 echo "-> done. restart Claude Code to see the statusline."
 echo "   change theme with: ~/.claude/statusline-theme.sh <mocha|macchiato|frappe|latte>"
+echo "   or use the slash commands: /statusline-theme, /statusline-config"
