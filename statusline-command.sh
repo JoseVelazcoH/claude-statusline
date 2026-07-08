@@ -14,6 +14,10 @@ theme_file="$THEMES_DIR/${flavor}.sh"
 [ -f "$theme_file" ] || theme_file="$THEMES_DIR/mocha.sh"
 [ -f "$theme_file" ] && . "$theme_file"
 
+# shellcheck source=lib.sh
+. "${SCRIPT_DIR:-$HOME/.claude}/lib.sh"
+layout=$(read_layout)
+
 # --- model ---
 model=$(echo "$input" | jq -r '.model.display_name // ""')
 
@@ -21,10 +25,19 @@ model=$(echo "$input" | jq -r '.model.display_name // ""')
 dir=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
 dir_name=$(basename "$dir")
 
-# --- git branch ---
+# --- git branch + working-tree changes ---
 branch=""
+changes_str=""
 if [ -d "${dir}/.git" ] || git -C "$dir" rev-parse --git-dir > /dev/null 2>&1; then
   branch=$(git -C "$dir" symbolic-ref --short HEAD 2>/dev/null || git -C "$dir" rev-parse --short HEAD 2>/dev/null)
+  porcelain=$(git -C "$dir" status --porcelain 2>/dev/null)
+  if [ -n "$porcelain" ]; then
+    n_added=$(printf '%s\n' "$porcelain" | grep -c '^??')
+    n_deleted=$(printf '%s\n' "$porcelain" | grep -c '^.D\|^D.')
+    n_total=$(printf '%s\n' "$porcelain" | grep -c '.')
+    n_modified=$(( n_total - n_added - n_deleted ))
+    changes_str="+${n_added} ~${n_modified} -${n_deleted}"
+  fi
 fi
 
 # --- usage stats (5h / 7d) from cache ---
@@ -92,42 +105,112 @@ usage_color() {
 
 # --- assemble output (colors from the loaded theme) ---
 SEP="\033[38;2;${C_SEP}m • \033[0m"
+BAR_SEP="\033[38;2;${C_SEP}m | \033[0m"
 LABEL="\033[2m\033[38;2;${C_LABEL}m"
 DELTA="\033[2m\033[38;2;${C_LABEL}m"
 RST="\033[0m"
 
-# line 1: model | folder • branch
-printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$C_MODEL" "$model"
-printf "\033[38;2;%sm | \033[0m" "$C_SEP"
-printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$C_DIR" "$dir_name"
-if [ -n "$branch" ]; then
-  printf "%b" "$SEP"
-  printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$C_BRANCH" "$branch"
-fi
+# render_limit <label> <pct> <reset-iso> -> prints "label ████░░ NN% ↻ delta", returns 1 if no data
+render_limit() {
+  local label=$1
+  local pct=$2
+  local reset_iso=$3
+  [ -z "$pct" ] && return 1
+  local delta=$(compute_delta "$reset_iso")
+  local color=$(usage_color "$pct")
+  printf "%b%s%b " "$LABEL" "$label" "$RST"
+  printf "%b%s %s%%%b" "$color" "$(render_bar "$pct")" "$pct" "$RST"
+  [ -n "$delta" ] && printf " %b↻ %s%b" "$DELTA" "$delta" "$RST"
+  return 0
+}
 
-# line 2: ctx  — dim label + severity-colored value
-if [ -n "$ctx_str" ]; then
-  printf "\n"
-  printf "%bctx%b " "$LABEL" "$RST"
-  printf "%b%s%b" "$(usage_color "$used_int")" "$ctx_str" "$RST"
-  [ -n "$ctx_tokens_str" ] && printf " %b(%s)%b" "$DELTA" "$ctx_tokens_str" "$RST"
-fi
+# render_segment <name> -> prints the segment's text, returns 1 if it has no data to show
+render_segment() {
+  case "$1" in
+    model)
+      [ -z "$model" ] && return 1
+      printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$C_MODEL" "$model"
+      ;;
+    dir)
+      [ -z "$dir_name" ] && return 1
+      printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$C_DIR" "$dir_name"
+      ;;
+    branch)
+      [ -z "$branch" ] && return 1
+      printf "\033[1m\033[38;2;%sm%s\033[22m\033[0m" "$C_BRANCH" "$branch"
+      ;;
+    ctx)
+      [ -z "$ctx_str" ] && return 1
+      printf "%bctx%b " "$LABEL" "$RST"
+      printf "%b%s%b" "$(usage_color "$used_int")" "$ctx_str" "$RST"
+      [ -n "$ctx_tokens_str" ] && printf " %b(%s)%b" "$DELTA" "$ctx_tokens_str" "$RST"
+      ;;
+    session) render_limit session "$five_h" "$five_h_reset" || return 1 ;;
+    week) render_limit week "$seven_d" "$seven_d_reset" || return 1 ;;
+    changes)
+      [ -z "$changes_str" ] && return 1
+      printf "\033[38;2;%sm+%s\033[0m \033[38;2;%sm~%s\033[0m \033[38;2;%sm-%s\033[0m" \
+        "$C_GREEN" "$n_added" "$C_YELLOW" "$n_modified" "$C_RED" "$n_deleted"
+      ;;
+    *) return 1 ;;
+  esac
+  return 0
+}
 
-# line 3: limit usage (5h / 7d)  — dim label + severity-colored value
-printf "\n"
-first=1
-if [ -n "$five_h_reset" ]; then
-  delta=$(compute_delta "$five_h_reset")
-  if [ -n "$delta" ]; then
-    printf "%breset%b " "$LABEL" "$RST"
-    printf "%b↻ %s%b" "$(usage_color "$five_h")" "$delta" "$RST"
-    first=0
-  fi
-fi
-if [ -n "$seven_d_reset" ]; then
-  delta=$(compute_delta "$seven_d_reset")
-  if [ -n "$delta" ]; then
-    [ "$first" -eq 0 ] && printf "%b" "$SEP"
-    printf "%b↻ %s%b" "$(usage_color "$seven_d")" "$delta" "$RST"
-  fi
-fi
+# render_group <comma,separated,segments> -> prints the joined, rendered text for one side of a line
+render_group() {
+  local list=$1
+  local out=""
+  local prev=""
+  local seg seg_out
+  for seg in $(printf '%s' "$list" | tr ',' ' '); do
+    seg_out=$(render_segment "$seg") || continue
+    if [ -n "$out" ]; then
+      if [ "$prev" = "model" ]; then
+        out="${out}$(printf "%b" "$BAR_SEP")"
+      else
+        out="${out}$(printf "%b" "$SEP")"
+      fi
+    fi
+    out="${out}${seg_out}"
+    prev=$seg
+  done
+  printf '%s' "$out"
+}
+
+# split the layout into lines on ';' — must run in the main shell (not a
+# pipeline/subshell) so the "$@" set here survives into the loop below.
+old_ifs=$IFS
+IFS=';'
+set -f
+set -- $layout
+set +f
+IFS=$old_ifs
+
+term_width=${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}
+
+any_line=0
+for group in "$@"; do
+  case "$group" in
+    *"|"*)
+      left_text=$(render_group "${group%|*}")
+      right_text=$(render_group "${group##*|}")
+      [ -z "$left_text" ] && [ -z "$right_text" ] && continue
+      [ "$any_line" -eq 1 ] && printf "\n"
+      pad=$(( term_width - $(visible_len "$left_text") - $(visible_len "$right_text") ))
+      [ "$pad" -lt 1 ] && pad=1
+      printf '%s' "$left_text"
+      i=0
+      while [ "$i" -lt "$pad" ]; do printf ' '; i=$((i + 1)); done
+      printf '%s' "$right_text"
+      any_line=1
+      ;;
+    *)
+      line=$(render_group "$group")
+      [ -z "$line" ] && continue
+      [ "$any_line" -eq 1 ] && printf "\n"
+      printf '%s' "$line"
+      any_line=1
+      ;;
+  esac
+done
