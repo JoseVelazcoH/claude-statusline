@@ -29,4 +29,10 @@ layout="branch;model,dir;session,week"
 segment_enabled branch "$(flatten_layout "$layout")" || { echo "FAIL: branch should be enabled after moving lines" >&2; exit 1; }
 ! segment_enabled ctx "$(flatten_layout "$layout")" || { echo "FAIL: ctx should be disabled (left out of layout)" >&2; exit 1; }
 
+assert_eq "$(flatten_layout "model,dir|session,week;ctx")" "model,dir,session,week,ctx" "flatten_layout with right-align pipe"
+segment_enabled changes "$ALL_SEGMENTS" || { echo "FAIL: changes should be a known segment" >&2; exit 1; }
+
+assert_eq "$(visible_len "plain text")" "10" "visible_len with no ansi codes"
+assert_eq "$(visible_len "$(printf '\033[1m\033[38;2;1;2;3mhi\033[0m')")" "2" "visible_len strips ansi codes"
+
 echo "ok"

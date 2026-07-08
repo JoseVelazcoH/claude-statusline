@@ -25,10 +25,19 @@ model=$(echo "$input" | jq -r '.model.display_name // ""')
 dir=$(echo "$input" | jq -r '.workspace.current_dir // .cwd // ""')
 dir_name=$(basename "$dir")
 
-# --- git branch ---
+# --- git branch + working-tree changes ---
 branch=""
+changes_str=""
 if [ -d "${dir}/.git" ] || git -C "$dir" rev-parse --git-dir > /dev/null 2>&1; then
   branch=$(git -C "$dir" symbolic-ref --short HEAD 2>/dev/null || git -C "$dir" rev-parse --short HEAD 2>/dev/null)
+  porcelain=$(git -C "$dir" status --porcelain 2>/dev/null)
+  if [ -n "$porcelain" ]; then
+    n_added=$(printf '%s\n' "$porcelain" | grep -c '^??')
+    n_deleted=$(printf '%s\n' "$porcelain" | grep -c '^.D\|^D.')
+    n_total=$(printf '%s\n' "$porcelain" | grep -c '.')
+    n_modified=$(( n_total - n_added - n_deleted ))
+    changes_str="+${n_added} ~${n_modified} -${n_deleted}"
+  fi
 fi
 
 # --- usage stats (5h / 7d) from cache ---
@@ -138,9 +147,35 @@ render_segment() {
       ;;
     session) render_limit session "$five_h" "$five_h_reset" || return 1 ;;
     week) render_limit week "$seven_d" "$seven_d_reset" || return 1 ;;
+    changes)
+      [ -z "$changes_str" ] && return 1
+      printf "\033[38;2;%sm+%s\033[0m \033[38;2;%sm~%s\033[0m \033[38;2;%sm-%s\033[0m" \
+        "$C_GREEN" "$n_added" "$C_YELLOW" "$n_modified" "$C_RED" "$n_deleted"
+      ;;
     *) return 1 ;;
   esac
   return 0
+}
+
+# render_group <comma,separated,segments> -> prints the joined, rendered text for one side of a line
+render_group() {
+  local list=$1
+  local out=""
+  local prev=""
+  local seg seg_out
+  for seg in $(printf '%s' "$list" | tr ',' ' '); do
+    seg_out=$(render_segment "$seg") || continue
+    if [ -n "$out" ]; then
+      if [ "$prev" = "model" ]; then
+        out="${out}$(printf "%b" "$BAR_SEP")"
+      else
+        out="${out}$(printf "%b" "$SEP")"
+      fi
+    fi
+    out="${out}${seg_out}"
+    prev=$seg
+  done
+  printf '%s' "$out"
 }
 
 # split the layout into lines on ';' — must run in the main shell (not a
@@ -152,25 +187,30 @@ set -- $layout
 set +f
 IFS=$old_ifs
 
+term_width=${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}
+
 any_line=0
 for group in "$@"; do
-  line=""
-  prev=""
-  for seg in $(printf '%s' "$group" | tr ',' ' '); do
-    out=$(render_segment "$seg") || continue
-    if [ -n "$line" ]; then
-      if [ "$prev" = "model" ]; then
-        line="${line}$(printf "%b" "$BAR_SEP")"
-      else
-        line="${line}$(printf "%b" "$SEP")"
-      fi
-    fi
-    line="${line}${out}"
-    prev=$seg
-  done
-  if [ -n "$line" ]; then
-    [ "$any_line" -eq 1 ] && printf "\n"
-    printf "%s" "$line"
-    any_line=1
-  fi
+  case "$group" in
+    *"|"*)
+      left_text=$(render_group "${group%|*}")
+      right_text=$(render_group "${group##*|}")
+      [ -z "$left_text" ] && [ -z "$right_text" ] && continue
+      [ "$any_line" -eq 1 ] && printf "\n"
+      pad=$(( term_width - $(visible_len "$left_text") - $(visible_len "$right_text") ))
+      [ "$pad" -lt 1 ] && pad=1
+      printf '%s' "$left_text"
+      i=0
+      while [ "$i" -lt "$pad" ]; do printf ' '; i=$((i + 1)); done
+      printf '%s' "$right_text"
+      any_line=1
+      ;;
+    *)
+      line=$(render_group "$group")
+      [ -z "$line" ] && continue
+      [ "$any_line" -eq 1 ] && printf "\n"
+      printf '%s' "$line"
+      any_line=1
+      ;;
+  esac
 done

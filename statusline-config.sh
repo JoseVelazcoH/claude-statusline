@@ -37,7 +37,9 @@ print_status() {
   echo
   echo "usage: statusline-config.sh enable|disable <segment>"
   echo "       statusline-config.sh order '<line1,segs>;<line2,segs>;...'"
-  echo "       (';' separates lines, ',' separates segments on the same line — quote it, ';' is a shell separator)"
+  echo "       (';' separates lines, ',' separates segments on the same line,"
+  echo "        '|' once per line right-aligns everything after it to the terminal edge"
+  echo "        — quote the argument, ';' and '|' are shell operators)"
 }
 
 case "$1" in
@@ -53,12 +55,19 @@ case "$1" in
     if segment_enabled "$seg" "$flat"; then
       echo "'$seg' already enabled"
     else
-      # append to the last line of the current layout
+      # append to the last line of the current layout (into its right group, if it has one)
       case "$current" in
         *";"*) prefix="${current%;*}"; last="${current##*;}" ;;
         *) prefix=""; last="$current" ;;
       esac
-      new_last="${last:+$last,}$seg"
+      case "$last" in
+        *"|"*)
+          left="${last%|*}"
+          right="${last##*|}"
+          new_last="${left}|${right:+$right,}$seg"
+          ;;
+        *) new_last="${last:+$last,}$seg" ;;
+      esac
       new="${prefix:+$prefix;}$new_last"
       printf '%s\n' "$new" > "$STATE"
       echo "enabled '$seg'"
@@ -77,8 +86,18 @@ case "$1" in
       IFS=$old_ifs
       new=""
       for group in "$@"; do
-        filtered=$(printf '%s' "$group" | tr ',' '\n' | grep -v "^${seg}\$" | tr '\n' ',' | sed 's/,$//')
-        [ -z "$filtered" ] && continue
+        case "$group" in
+          *"|"*)
+            gleft=$(printf '%s' "${group%|*}" | tr ',' '\n' | grep -v "^${seg}\$" | tr '\n' ',' | sed 's/,$//')
+            gright=$(printf '%s' "${group##*|}" | tr ',' '\n' | grep -v "^${seg}\$" | tr '\n' ',' | sed 's/,$//')
+            [ -z "$gleft" ] && [ -z "$gright" ] && continue
+            filtered="${gleft}|${gright}"
+            ;;
+          *)
+            filtered=$(printf '%s' "$group" | tr ',' '\n' | grep -v "^${seg}\$" | tr '\n' ',' | sed 's/,$//')
+            [ -z "$filtered" ] && continue
+            ;;
+        esac
         new="${new:+$new;}$filtered"
       done
       printf '%s\n' "$new" > "$STATE"

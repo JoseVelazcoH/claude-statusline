@@ -1,11 +1,15 @@
 # Shared helpers for statusline-command.sh and statusline-config.sh.
 #
 # Layout format: ';' separates lines, ',' separates segments within a line,
-# e.g. "model,dir,branch;ctx;session,week" is the 3-line default. A layout
-# with no ';' puts every segment on one line.
+# '|' (optional, once per line) splits that line into a left group and a
+# right group pushed to the terminal edge, e.g.
+# "model,dir,branch;ctx;session,week|changes" is the 3-line default with a
+# git-changes segment right-aligned on line 3. A layout with no ';' puts
+# every segment on one line.
 
-ALL_SEGMENTS="model,dir,branch,ctx,session,week"
+ALL_SEGMENTS="model,dir,branch,ctx,session,week,changes"
 DEFAULT_LAYOUT="model,dir,branch;ctx;session,week"
+ESC=$(printf '\033')
 
 # render_bar <percent> [width=10] -> "████░░░░░░"
 render_bar() {
@@ -39,7 +43,12 @@ read_layout() {
   printf '%s' "${val:-$DEFAULT_LAYOUT}"
 }
 
-# flatten_layout <layout> -> flat comma list of every segment in the layout (line breaks removed)
+# flatten_layout <layout> -> flat comma list of every segment in the layout (line/align markers removed)
 flatten_layout() {
-  printf '%s' "$1" | tr ';' ','
+  printf '%s' "$1" | tr ';|' ',,'
+}
+
+# visible_len <string> -> character count with ANSI "\033[...m" color/style codes stripped
+visible_len() {
+  printf '%s' "$1" | sed "s/${ESC}\[[0-9;]*m//g" | wc -m | tr -d ' '
 }
