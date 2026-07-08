@@ -74,6 +74,7 @@ Seven segments are available: `model`, `dir`, `branch`, `ctx`, `session` (5h usa
 ~/.claude/statusline-config.sh                    # show current layout + on/off status
 ~/.claude/statusline-config.sh disable branch     # hide a segment, wherever it is
 ~/.claude/statusline-config.sh enable branch      # show it again (appended to the last line)
+~/.claude/statusline-config.sh enable changes     # e.g. "week ... 86% ↻ 1d 1h • +2 ~1 -0"
 ~/.claude/statusline-config.sh order 'model,dir;ctx;session,week'   # set the full layout at once
 ```
 
@@ -103,7 +104,7 @@ Or from inside Claude Code: `/statusline-config disable branch`, `/statusline-co
 
 ### Right-aligning part of a line
 
-Claude Code's statusline is a horizontal strip — there's no real side panel — but a single `|` inside a line pushes everything after it to the terminal's right edge (using the `$COLUMNS` Claude Code sets before running the script, 80 as a fallback), giving a fake two-column look:
+Claude Code's statusline is a horizontal strip — there's no real side panel, and no way to draw one. A single `|` inside a line pushes everything after it to the terminal's right edge (using the `$COLUMNS` Claude Code sets before running the script, 80 as a fallback), giving a fake two-column look:
 
 ```sh
 ~/.claude/statusline-config.sh order 'model,dir,branch;ctx;session,week|changes'
@@ -115,7 +116,7 @@ ctx 12% (8k/200k)
 session ████████░░ 82% ↻ 2h 15m • week ██░░░░░░░░ 23% ↻ 3d 4h        +2 ~3 -1
 ```
 
-Only one `|` per line is meaningful (everything after the first is treated as the right group). If the terminal is too narrow to fit both sides, the gap just shrinks to a single space instead of overlapping.
+Only one `|` per line is meaningful (everything after the first is treated as the right group). This depends on `$COLUMNS` matching the width the statusline actually renders at, which isn't guaranteed in every terminal/multiplexer — if it's off, the gap can be much wider than expected instead of lining up neatly. `changes` is enabled inline (comma-separated, see above) for this reason; reach for `|` only if you've confirmed it lines up in your terminal.
 
 ## Slash commands
 
