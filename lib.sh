@@ -43,6 +43,20 @@ read_layout() {
   printf '%s' "${val:-$DEFAULT_LAYOUT}"
 }
 
+# Limit style for the session/week segments:
+#   full    -> "session ████░░ 13% ↻ 3h 54m" (label + bar + percent + reset)
+#   compact -> "reset ↻ 3h 54m"              (reset time only)
+DEFAULT_LIMIT_STYLE="full"
+
+# read_limit_style -> current style from ~/.claude/.statusline-limit-style, or the default
+read_limit_style() {
+  local val=$(cat "$HOME/.claude/.statusline-limit-style" 2>/dev/null)
+  case "$val" in
+    full|compact) printf '%s' "$val" ;;
+    *) printf '%s' "$DEFAULT_LIMIT_STYLE" ;;
+  esac
+}
+
 # flatten_layout <layout> -> flat comma list of every segment in the layout (line/align markers removed)
 flatten_layout() {
   printf '%s' "$1" | tr ';|' ',,'

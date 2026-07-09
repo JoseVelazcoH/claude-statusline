@@ -17,6 +17,7 @@ theme_file="$THEMES_DIR/${flavor}.sh"
 # shellcheck source=lib.sh
 . "${SCRIPT_DIR:-$HOME/.claude}/lib.sh"
 layout=$(read_layout)
+limit_style=$(read_limit_style)
 
 # --- model ---
 model=$(echo "$input" | jq -r '.model.display_name // ""')
@@ -118,6 +119,14 @@ render_limit() {
   [ -z "$pct" ] && return 1
   local delta=$(compute_delta "$reset_iso")
   local color=$(usage_color "$pct")
+  if [ "$limit_style" = "compact" ]; then
+    # reset time only, colored by usage severity: "reset ↻ 3h 54m"
+    # the "reset" label is shown once, on the session (first) segment.
+    [ -z "$delta" ] && return 1
+    [ "$label" = "session" ] && printf "%breset%b " "$LABEL" "$RST"
+    printf "%b↻ %s%b" "$color" "$delta" "$RST"
+    return 0
+  fi
   printf "%b%s%b " "$LABEL" "$label" "$RST"
   printf "%b%s %s%%%b" "$color" "$(render_bar "$pct")" "$pct" "$RST"
   [ -n "$delta" ] && printf " %b↻ %s%b" "$DELTA" "$delta" "$RST"

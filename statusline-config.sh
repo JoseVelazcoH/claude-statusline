@@ -5,6 +5,7 @@ set -e
 
 CLAUDE_DIR="$HOME/.claude"
 STATE="$CLAUDE_DIR/.statusline-config"
+STYLE_STATE="$CLAUDE_DIR/.statusline-limit-style"
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd 2>/dev/null)
 . "${SCRIPT_DIR:-$CLAUDE_DIR}/lib.sh"
@@ -35,11 +36,16 @@ print_status() {
     fi
   done
   echo
+  echo "session/week style: $(read_limit_style)  (full | compact)"
+  echo
   echo "usage: statusline-config.sh enable|disable <segment>"
   echo "       statusline-config.sh order '<line1,segs>;<line2,segs>;...'"
   echo "       (';' separates lines, ',' separates segments on the same line,"
   echo "        '|' once per line right-aligns everything after it to the terminal edge"
   echo "        — quote the argument, ';' and '|' are shell operators)"
+  echo "       statusline-config.sh style full|compact"
+  echo "         full    = label + bar + percent + reset time"
+  echo "         compact = reset time only (reset ↻ 3h 54m)"
 }
 
 case "$1" in
@@ -118,6 +124,18 @@ case "$1" in
     done
     printf '%s\n' "$list" > "$STATE"
     echo "layout set to '$list'"
+    ;;
+  style)
+    case "$2" in
+      full|compact)
+        printf '%s\n' "$2" > "$STYLE_STATE"
+        echo "session/week style set to '$2'"
+        ;;
+      *)
+        echo "error: style must be 'full' or 'compact'" >&2
+        exit 1
+        ;;
+    esac
     ;;
   *)
     echo "error: unknown command '$1'" >&2
