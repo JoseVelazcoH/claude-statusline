@@ -2,108 +2,90 @@
 
 ![statusline](assets/statusline.svg)
 
-A minimal Claude Code statusline showing model, folder, git branch, context window, and usage-limit progress bars. Themed with Catppuccin Mocha, configurable segments, and portable across Linux and macOS.
+A minimal, portable (Linux/macOS) Claude Code statusline showing model, folder, git branch, context window, and usage-limit bars. Themed with Catppuccin, configurable segments.
 
-## Installation
+## Install
 
-### Quick install
-
-Downloads the scripts and merges the required `settings.json` blocks automatically (requires `curl` and `jq`):
+Requires `curl` and `jq`. Downloads the scripts and merges the `settings.json` blocks:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/JoseVelazcoH/claude-statusline/main/install.sh | sh
 ```
 
-Restart Claude Code to see the statusline.
+Restart Claude Code to see it.
 
-### Manual install
-
-**1. Clone the repo**
+<details>
+<summary>Manual install</summary>
 
 ```sh
 git clone https://github.com/JoseVelazcoH/claude-statusline.git
 cd claude-statusline
-```
 
-**2. Copy the scripts**
-
-```sh
-cp fetch-usage.sh ~/.claude/fetch-usage.sh
-cp statusline-command.sh ~/.claude/statusline-command.sh
-cp statusline-config.sh ~/.claude/statusline-config.sh
-cp lib.sh ~/.claude/lib.sh
+# scripts
+cp fetch-usage.sh statusline-command.sh statusline-config.sh lib.sh ~/.claude/
 chmod +x ~/.claude/fetch-usage.sh ~/.claude/statusline-command.sh ~/.claude/statusline-config.sh
 
+# skills
 mkdir -p ~/.claude/skills/statusline-theme ~/.claude/skills/statusline-config
 cp skills/statusline-theme/SKILL.md ~/.claude/skills/statusline-theme/SKILL.md
 cp skills/statusline-config/SKILL.md ~/.claude/skills/statusline-config/SKILL.md
-```
 
-**3. Merge `settings.json` into `~/.claude/settings.json`**
-
-Add the `statusLine` and `hooks` blocks from `settings.json` into your existing `~/.claude/settings.json`. If you don't have one yet, copy it directly:
-
-```sh
+# settings: merge the statusLine and hooks blocks into your ~/.claude/settings.json,
+# or copy it directly if you don't have one
 cp settings.json ~/.claude/settings.json
+
+bash ~/.claude/fetch-usage.sh   # optional: trigger an initial usage fetch
 ```
 
-**4. Trigger an initial fetch (optional)**
+</details>
+
+## Usage
+
+All changes apply on the next render, no restart needed. Every command also works inside Claude Code as a slash command (e.g. `/statusline-config order '...'`).
+
+### Themes
+
+Catppuccin `mocha` (default), `macchiato`, `frappe`, `latte`. Add your own by dropping a `themes/<name>.sh` that sets the same color-role variables.
 
 ```sh
-bash ~/.claude/fetch-usage.sh
+~/.claude/statusline-theme.sh latte   # set a theme
+~/.claude/statusline-theme.sh         # list themes and show the current one
 ```
 
-## Themes
+### Layout
 
-Four Catppuccin flavors are included: `mocha` (default), `macchiato`, `frappe`, and `latte`. Switch with:
+State lives in `~/.claude/.statusline-config` as a layout string where `;` separates lines and `,` separates segments. Default: `model,dir,branch;ctx;session,week`. Delete the file to reset.
 
 ```sh
-~/.claude/statusline-theme.sh latte     # set a theme
-~/.claude/statusline-theme.sh           # list themes and show the current one
+~/.claude/statusline-config.sh                      # show current layout + on/off status
+~/.claude/statusline-config.sh disable branch       # hide a segment, wherever it is
+~/.claude/statusline-config.sh enable changes       # append to the last line
+~/.claude/statusline-config.sh order 'model,dir,branch,ctx,session,week'   # quote it: ';' is a shell separator
 ```
 
-The change applies on the next statusline render, no restart needed. Add your own palette by dropping a `themes/<name>.sh` file that sets the same color-role variables.
+`enable` appends to the last line; `disable` drops the line if it becomes empty. Segments can go on any line, in any order.
 
-Or from inside Claude Code: `/statusline-theme latte`.
+### Limit style
 
-## Configuration
-
-Seven segments are available: `model`, `dir`, `branch`, `ctx`, `session` (5h usage bar), `week` (7d usage bar), `changes` (git working-tree summary, e.g. `+2 ~3 -1` for added/modified/deleted files — hidden when the tree is clean).
+Controls how `session` and `week` render.
 
 ```sh
-~/.claude/statusline-config.sh                    # show current layout + on/off status
-~/.claude/statusline-config.sh disable branch     # hide a segment, wherever it is
-~/.claude/statusline-config.sh enable branch      # show it again (appended to the last line)
-~/.claude/statusline-config.sh enable changes     # e.g. "week ... 86% ↻ 1d 1h • +2 ~1 -0"
-~/.claude/statusline-config.sh order 'model,dir;ctx;session,week'   # set the full layout at once
+~/.claude/statusline-config.sh style compact   # "reset ↻ 3h 54m • ↻ 1d 21h"
+~/.claude/statusline-config.sh style full      # "session ████░░ 13% ↻ 3h 54m" (default)
 ```
 
-State lives in `~/.claude/.statusline-config` — a layout string where `;` separates lines and `,` separates segments on the same line, e.g. the default is `model,dir,branch;ctx;session,week` (3 lines). Delete the file to go back to that default. Changes apply on the next render — no restart needed.
+## Segments
 
-Quote the argument to `order`: `;` is a shell command separator, so an unquoted layout string would run as multiple commands.
-
-Segments can go on **any** line, in any order, and any number of lines:
-
-```sh
-# move branch to its own line, drop ctx entirely
-~/.claude/statusline-config.sh order 'model,dir;branch;session,week'
-
-# collapse everything onto a single line (no ';' at all)
-~/.claude/statusline-config.sh order 'model,dir,branch,ctx,session,week'
-```
-
-```
-sonnet-5 | claude-statusline
-main
-session ████████░░ 82% ↻ 2h 15m • week ██░░░░░░░░ 23% ↻ 3d 4h
-```
-
-`enable <segment>` appends it to the last line of the current layout (not to a fixed default line); `disable <segment>` removes it from wherever it is and drops the line if it becomes empty.
-
-Or from inside Claude Code: `/statusline-config disable branch`, `/statusline-config order 'model,dir;ctx;session,week'`.
+| Segment   | Shows                                                        |
+| --------- | ----------------------------------------------------------- |
+| `model`   | Model display name                                          |
+| `dir`     | Current folder                                              |
+| `branch`  | Git branch                                                  |
+| `ctx`     | Context-window usage                                        |
+| `session` | 5h usage limit                                              |
+| `week`    | 7d usage limit                                              |
+| `changes` | Git working tree (`+2 ~3 -1`), hidden when the tree is clean |
 
 ## Dependencies
 
-- `jq`
-- `curl`
-- `git` (optional, for branch display)
+`jq`, `curl`, `git` (optional, for branch display).
